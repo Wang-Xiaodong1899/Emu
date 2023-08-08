@@ -171,7 +171,7 @@ if __name__ == '__main__':
     # initialize and load model
     args.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     emu_model = prepare_model('Emu-14B', args)
-    emu_model.to(args.device).to(torch.bfloat16)
+    emu_model.to(args.device).to(torch.float16)
 
     if args.instruct:
         instruct_example()

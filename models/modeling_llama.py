@@ -167,7 +167,7 @@ class LLaMAForClsAndRegression(nn.Module):
 
         self.config = self.lm.config
         self.lm.config.d_model = self.lm.config.hidden_size
-        self.lm.bfloat16()
+        self.lm.float16()
 
         self.prompt = None
 

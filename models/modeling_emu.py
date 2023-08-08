@@ -119,9 +119,9 @@ class Emu(nn.Module):
         
         image = samples["image"]
         if image is not None:
-            image = image.to(dtype=torch.bfloat16)
+            image = image.to(dtype=torch.float16)
             image_features = self.ln_visual(self.visual.forward_features(image))
-            image_features = self.cformer(image_features).squeeze().to(dtype=torch.bfloat16)
+            image_features = self.cformer(image_features).squeeze().to(dtype=torch.float16)
 
         prompt = samples["prompt"] if "prompt" in samples.keys() else self.prompt
 
@@ -144,7 +144,7 @@ class Emu(nn.Module):
         img_token_id = self.decoder.tokenizer.convert_tokens_to_ids(["<image>"])[0]  # 32003
         img_token_idx_list = input_ids.eq(img_token_id).squeeze() 
 
-        with torch.amp.autocast(device_type=self.args.device.type, dtype=torch.bfloat16):
+        with torch.amp.autocast(device_type=self.args.device.type, dtype=torch.float16):
             if self.args.instruct:
                 inputs_embeds = self.decoder.lm.model.model.embed_tokens(input_ids)
             else:
