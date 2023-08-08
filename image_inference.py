@@ -37,7 +37,7 @@ if __name__ == "__main__":
         path=args.ckpt_path,
         args=args,
     )
-    pipeline = pipeline.float16().cuda()
+    pipeline = pipeline.half().cuda()
 
     # image blend case
     # image_1 = Image.open("examples/sunflower.png")

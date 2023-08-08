@@ -88,7 +88,7 @@ class Flan_T5(nn.Module):
         )
 
         for name, param in self.lm.named_parameters():
-            param.data = param.data.float16()
+            param.data = param.data.half()
 
     def forward(self, image_embeds, text_input, text_output, input_mask, output_mask):
         """
