@@ -1,10 +1,13 @@
 import argparse
+import os
+from PIL import Image
 
 import json
 
 import torch
 from models.modeling_emu import Emu
 from utils import process_img, process_video
+from tqdm import tqdm
 
 image_placeholder = "[IMG]" + "<image>" * 32 + "[/IMG]"
 image_system_msg = "You will be presented with an image: [IMG]ImageContent[/IMG]. You will be able to see the image after I provide it to you. Please answer my questions based on the given image."
@@ -123,9 +126,9 @@ def pretrain_example():
     # -- in-context learning
     Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
 
-def imagecaption_example():
+def imagecaption_example(img_path='examples/dog.png'):
     image_text_sequence = [
-        process_img(img_path='examples/dog.png', device=args.device),
+        process_img(img_path, device=args.device),
     ]
     interleaved_sequence_1 = ''
     image_list_1 = []
@@ -135,8 +138,8 @@ def imagecaption_example():
         else:  # image
             image_list_1.append(item)
             interleaved_sequence_1 += image_placeholder + " describing the image in detail. the image shows"
-    # print(f'interleaved_sequence_1: {interleaved_sequence_1}')
-    Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
+
+    return Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
     
 
 
@@ -184,14 +187,72 @@ def instruct_example():
 if __name__ == '__main__':
 
     args = parse_args()
+    
+    version = 'Emu-pretrain-zero-shot'
+    
 
     # initialize and load model
     args.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     emu_model = prepare_model('Emu-14B', args)
     emu_model.to(args.device).to(torch.float16)
 
-    if args.instruct:
-        instruct_example()
-    else:
-        # pretrain_example()
-        imagecaption_example()
+    # if args.instruct:
+    #     instruct_example()
+    # else:
+    #     imagecaption_example(img_path)
+    
+    ## test coco_karpathy val data
+    with open("/f_data/G/dataset/coco_karpathy/coco_karpathy_test.json", "r") as file:  
+        data_list = json.load(file)  
+    lens = len(data_list)
+    print(f'loaded {lens} coco_karpathy val data')
+    
+    results = []
+    for item in tqdm(data_list):
+        try:
+            id = item['image'].split('/')[-1].strip('.jpg').split('_')[-1]
+            image_name = os.path.basename(item['image'])
+            image_path = os.path.join('/f_data/G/dataset/mscoco2014/images/', image_name)
+            pred_ans = imagecaption_example(img_path=image_path)
+            outputs = {
+                'image_id': int(id),
+                'caption': pred_ans,
+            }
+        except Exception as e:
+            print(f'error in {image_name} : {e}')
+            continue
+        results.append(outputs)
+    with open(f"/f_data/G/mmllama/cocokar_eval_{version}.json", "w") as file:  
+        json.dump(results, file)
+    
+    print('saved cocokar json')
+    
+    # test Nocap val data
+    with open("/f_data/G/dataset/nocap/nocaps_val_4500_captions.json", "r") as file:  
+        data_list = json.load(file)  
+    lens = len(data_list['images'])
+    print(f'loaded {lens} nocap val data')
+
+    results = []
+    for item in tqdm(data_list['images']):
+        try:
+            url = item['coco_url']
+            id = item['id']
+            domain = item['domain']
+            image_name = os.path.basename(url)
+            image_path = os.path.join('/f_data/G/dataset/nocap/val/', image_name)
+            image = Image.open(image_path)
+            pred_ans = imagecaption_example(img_path=image_path)
+            outputs = {
+                'image_id': int(id),
+                'caption': pred_ans,
+                'domain': domain,
+                'name': image_name
+            }
+            results.append(outputs)
+        except Exception as e:
+            print(f'error in {image_name} : {e}')
+            continue
+    with open(f"/f_data/G/mmllama/nocap_eval_{version}.json", "w") as file:  
+        json.dump(results, file)
+    print('saved nocap json')
