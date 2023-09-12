@@ -28,6 +28,12 @@ def parse_args():
         default='/f_data/G/Emu/Emu/Emu-pretrain.pt',
         help="Emu ckpt path",
     )
+    parser.add_argument(
+        "--version",
+        type=str,
+        default='pretrain',
+        help="Emu version",
+    )
     args = parser.parse_args()
 
     return args
@@ -102,6 +108,7 @@ def Emu_instruct_caption(img):
     )[0].strip()
 
     print(f"===> caption output: {output_text}\n")
+    return output_text
 
 
 def pretrain_example():
@@ -140,7 +147,11 @@ def imagecaption_example(img_path='examples/dog.png'):
             interleaved_sequence_1 += image_placeholder + " describing the image in detail. the image shows"
 
     return Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
+
+def eval_instruct_caption(img_path='examples/dog.png'):
+    image = process_img(img_path, device=args.device)
     
+    return Emu_instruct_caption(image)
 
 
 def instruct_example():
@@ -188,7 +199,7 @@ if __name__ == '__main__':
 
     args = parse_args()
     
-    version = 'Emu-pretrain-zero-shot'
+    version = args.version + '-zero-shot'
     
 
     # initialize and load model
@@ -213,7 +224,10 @@ if __name__ == '__main__':
             id = item['image'].split('/')[-1].strip('.jpg').split('_')[-1]
             image_name = os.path.basename(item['image'])
             image_path = os.path.join('/f_data/G/dataset/mscoco2014/images/', image_name)
-            pred_ans = imagecaption_example(img_path=image_path)
+            if args.instruct:
+                pred_ans = eval_instruct_caption(img_path=image_path)
+            else:
+                pred_ans = imagecaption_example(img_path=image_path)
             outputs = {
                 'image_id': int(id),
                 'caption': pred_ans,
@@ -242,7 +256,10 @@ if __name__ == '__main__':
             image_name = os.path.basename(url)
             image_path = os.path.join('/f_data/G/dataset/nocap/val/', image_name)
             image = Image.open(image_path)
-            pred_ans = imagecaption_example(img_path=image_path)
+            if args.instruct:
+                pred_ans = eval_instruct_caption(img_path=image_path)
+            else:
+                pred_ans = imagecaption_example(img_path=image_path)
             outputs = {
                 'image_id': int(id),
                 'caption': pred_ans,
