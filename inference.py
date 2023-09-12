@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument(
         "--ckpt-path",
         type=str,
-        default='',
+        default='/f_data/G/Emu/Emu/Emu-pretrain.pt',
         help="Emu ckpt path",
     )
     args = parser.parse_args()
@@ -122,6 +122,22 @@ def pretrain_example():
     # -- in-context learning
     Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
 
+def imagecaption_example():
+    image_text_sequence = [
+        process_img(img_path='examples/dog.png', device=args.device),
+    ]
+    interleaved_sequence_1 = ''
+    image_list_1 = []
+    for item in image_text_sequence:
+        if isinstance(item, str):  # text
+            interleaved_sequence_1 += item
+        else:  # image
+            image_list_1.append(item)
+            interleaved_sequence_1 += image_placeholder + " describing the image in detail. the image shows"
+    # print(f'interleaved_sequence_1: {interleaved_sequence_1}')
+    Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
+    
+
 
 def instruct_example():
     # prepare image captioning and vqa examples
@@ -176,4 +192,5 @@ if __name__ == '__main__':
     if args.instruct:
         instruct_example()
     else:
-        pretrain_example()
+        # pretrain_example()
+        imagecaption_example()
