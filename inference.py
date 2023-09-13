@@ -154,11 +154,11 @@ def vqa_example(img_path="examples/dog.png", question="How many dogs are there?"
             image_list_1.append(item)
             interleaved_sequence_1 += image_placeholder + " describing the image in detail. the image shows"
     
-    caption = Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
+    caption = Emu_inference(image_list_1, interleaved_sequence_1, instruct=False, max_new_tokens=64)
 
     interleaved_sequence = f"a picture of {caption}. based on the picture, {question} short answer:"
     
-    vqa_answer = Emu_inference([], interleaved_sequence, instruct=False)
+    vqa_answer = Emu_inference([], interleaved_sequence, instruct=False, max_new_tokens=16)
     
     return vqa_answer
 

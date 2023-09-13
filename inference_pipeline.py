@@ -1,6 +1,7 @@
 import argparse
 import os
 from PIL import Image
+from collections import Counter
 
 import json
 
@@ -34,6 +35,22 @@ def parse_args():
         default='pretrain',
         help="Emu version",
     )
+    # if eval vqa
+    parser.add_argument(
+        "--vqa",
+        action='store_true',
+        default=False,
+        help="eval vqa",
+    )
+    # if eval caption
+    parser.add_argument(
+        "--caption",
+        action='store_true',
+        default=False,
+        help="eval caption",
+    )
+    
+    
     args = parser.parse_args()
 
     return args
@@ -152,6 +169,27 @@ def imagecaption_example(img_path='examples/dog.png'):
 
     return Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
 
+def vqa_example(img_path="examples/dog.png", question="How many dogs are there?"):
+    image_text_sequence = [
+        process_img(img_path, device=args.device),
+    ]
+    interleaved_sequence_1 = ''
+    image_list_1 = []
+    for item in image_text_sequence:
+        if isinstance(item, str):  # text
+            interleaved_sequence_1 += item
+        else:  # image
+            image_list_1.append(item)
+            interleaved_sequence_1 += image_placeholder + " describing the image in detail. the image shows"
+    
+    caption = Emu_inference(image_list_1, interleaved_sequence_1, instruct=False, max_new_tokens=64)
+
+    interleaved_sequence = f"a picture of {caption}. based on the picture, {question} short answer:"
+    
+    vqa_answer = Emu_inference([], interleaved_sequence, instruct=False, max_new_tokens=16)
+    
+    return vqa_answer
+
 def eval_instruct_caption(img_path='examples/dog.png'):
     image = process_img(img_path, device=args.device)
     
@@ -203,9 +241,8 @@ if __name__ == '__main__':
 
     args = parse_args()
     
-    version = args.version + '-zero-shot'
+    version = args.version
     
-
     # initialize and load model
     args.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     emu_model = prepare_model('Emu-14B', args)
@@ -216,64 +253,111 @@ if __name__ == '__main__':
     # else:
     #     imagecaption_example(img_path)
     
-    ## test coco_karpathy val data
-    with open("/f_data/G/dataset/coco_karpathy/coco_karpathy_test.json", "r") as file:  
-        data_list = json.load(file)  
-    lens = len(data_list)
-    print(f'loaded {lens} coco_karpathy val data')
-    
-    results = []
-    for item in tqdm(data_list):
-        try:
-            id = item['image'].split('/')[-1].strip('.jpg').split('_')[-1]
-            image_name = os.path.basename(item['image'])
-            image_path = os.path.join('/f_data/G/dataset/mscoco2014/images/', image_name)
-            if args.instruct:
-                pred_ans = eval_instruct_caption(img_path=image_path)
-            else:
-                pred_ans = imagecaption_example(img_path=image_path)
-            outputs = {
-                'image_id': int(id),
-                'caption': pred_ans,
-            }
-        except Exception as e:
-            print(f'error in {image_name} : {e}')
-            continue
-        results.append(outputs)
-    with open(f"/f_data/G/mmllama/cocokar_eval_{version}.json", "w") as file:  
-        json.dump(results, file)
-    
-    print('saved cocokar json')
-    
-    # test Nocap val data
-    with open("/f_data/G/dataset/nocap/nocaps_val_4500_captions.json", "r") as file:  
-        data_list = json.load(file)  
-    lens = len(data_list['images'])
-    print(f'loaded {lens} nocap val data')
+    if args.vqa:
+        with open("/f_data/G/dataset/okvqa/OpenEnded_mscoco_val2014_questions.json", "r") as file:  
+            vqa_data = json.load(file)['questions']
+        with open("/f_data/G/dataset/okvqa/mscoco_val2014_annotations.json", "r") as file:  
+            vqa_anno = json.load(file)
+        print(f'loaded {len(vqa_data)} vqa val data')
 
-    results = []
-    for item in tqdm(data_list['images']):
-        try:
-            url = item['coco_url']
-            id = item['id']
-            domain = item['domain']
-            image_name = os.path.basename(url)
-            image_path = os.path.join('/f_data/G/dataset/nocap/val/', image_name)
-            image = Image.open(image_path)
-            if args.instruct:
-                pred_ans = eval_instruct_caption(img_path=image_path)
-            else:
-                pred_ans = imagecaption_example(img_path=image_path)
-            outputs = {
-                'image_id': int(id),
-                'caption': pred_ans,
-                'domain': domain,
-                'name': image_name
-            }
-            results.append(outputs)
-        except Exception as e:
-            print(f'error in {image_name} : {e}')
-            continue
-    with open(f"/f_data/G/mmllama/nocap_eval_{version}.json", "w") as file:  
-        json.dump(results, file)
-    print('saved nocap json')
+        ans_dict = {}
+        for item in vqa_anno['annotations']:
+            anss = item['answers']
+            ans_list = []
+            for ans in anss:
+                ans_list.append(ans['answer'])
+            ans_dict[item['question_id']] = ans_list
+        
+        results = []
+        for item in tqdm(vqa_data):
+            try:
+                question_id = item['question_id']
+                question = item['question']
+                image_id = item['image_id']
+                image_name = str(image_id).zfill(12)
+                image_name = 'COCO_val2014_' + image_name + '.jpg'
+                image_path = os.path.join('/f_data/G/dataset/mscoco2014/images', image_name)
+                
+                answers = ans_dict[question_id]
+                counter = Counter(answers)
+                most_ans, _ = counter.most_common(1)[0]
+                pred_ans = vqa_example(img_path=image_path, question=question)
+
+                outputs = {
+                    'question_id': question_id,
+                    'question': question,
+                    'answer': most_ans,
+                    'image': image_name,
+                    'pred': pred_ans
+                }
+                results.append(outputs)
+            except Exception as e:
+                print(f'error in {image_name} : {e}')
+                continue
+        with open(f"/f_data/G/mmllama/okvqa_eval_{version}.json", "w") as file:  
+            json.dump(results, file)
+    
+    
+    if args.caption:
+        ## test coco_karpathy val data
+        with open("/f_data/G/dataset/coco_karpathy/coco_karpathy_test.json", "r") as file:  
+            data_list = json.load(file)  
+        lens = len(data_list)
+        print(f'loaded {lens} coco_karpathy val data')
+        
+        results = []
+        for item in tqdm(data_list):
+            try:
+                id = item['image'].split('/')[-1].strip('.jpg').split('_')[-1]
+                image_name = os.path.basename(item['image'])
+                image_path = os.path.join('/f_data/G/dataset/mscoco2014/images/', image_name)
+                if args.instruct:
+                    pred_ans = eval_instruct_caption(img_path=image_path)
+                else:
+                    pred_ans = imagecaption_example(img_path=image_path)
+                outputs = {
+                    'image_id': int(id),
+                    'caption': pred_ans,
+                }
+                results.append(outputs)
+            except Exception as e:
+                print(f'error in {image_name} : {e}')
+                continue
+            
+        with open(f"/f_data/G/mmllama/cocokar_eval_{version}.json", "w") as file:  
+            json.dump(results, file)
+        
+        print('saved cocokar json')
+        
+        # test Nocap val data
+        with open("/f_data/G/dataset/nocap/nocaps_val_4500_captions.json", "r") as file:  
+            data_list = json.load(file)  
+        lens = len(data_list['images'])
+        print(f'loaded {lens} nocap val data')
+
+        results = []
+        for item in tqdm(data_list['images']):
+            try:
+                url = item['coco_url']
+                id = item['id']
+                domain = item['domain']
+                image_name = os.path.basename(url)
+                image_path = os.path.join('/f_data/G/dataset/nocap/val/', image_name)
+                image = Image.open(image_path)
+                if args.instruct:
+                    pred_ans = eval_instruct_caption(img_path=image_path)
+                else:
+                    pred_ans = imagecaption_example(img_path=image_path)
+                outputs = {
+                    'image_id': int(id),
+                    'caption': pred_ans,
+                    'domain': domain,
+                    'name': image_name
+                }
+                results.append(outputs)
+            except Exception as e:
+                print(f'error in {image_name} : {e}')
+                continue
+        with open(f"/f_data/G/mmllama/nocap_eval_{version}.json", "w") as file:  
+            json.dump(results, file)
+        print('saved nocap json')
