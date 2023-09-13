@@ -76,7 +76,11 @@ def Emu_inference(image_list, text_sequence, system='', instruct=True, max_new_t
 
     print(f"===> prompt: {prompt}")
 
-    samples = {"image": torch.cat(image_list, dim=0), "prompt": prompt}
+    if len(image_list) == 0:
+        samples = {"image": None, "prompt": prompt}
+    else:
+        samples = {"image": torch.cat(image_list, dim=0), "prompt": prompt}
+
 
     output_text = emu_model.generate(
         samples,

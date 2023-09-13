@@ -66,8 +66,11 @@ def Emu_inference(image_list, text_sequence, system='', instruct=True, max_new_t
         prompt = text_sequence
 
     print(f"===> prompt: {prompt}")
-
-    samples = {"image": torch.cat(image_list, dim=0), "prompt": prompt}
+    
+    if len(image_list) == 0:
+        samples = {"image": None, "prompt": prompt}
+    else:
+        samples = {"image": torch.cat(image_list, dim=0), "prompt": prompt}
 
     output_text = emu_model.generate(
         samples,
@@ -137,7 +140,27 @@ def imagecaption_example():
             interleaved_sequence_1 += image_placeholder + " describing the image in detail. the image shows"
     # print(f'interleaved_sequence_1: {interleaved_sequence_1}')
     Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
+
+def vqa_example(img_path="examples/dog.png", question="How many dogs are there?"):
+    image_text_sequence = [
+        process_img(img_path, device=args.device),
+    ]
+    interleaved_sequence_1 = ''
+    image_list_1 = []
+    for item in image_text_sequence:
+        if isinstance(item, str):  # text
+            interleaved_sequence_1 += item
+        else:  # image
+            image_list_1.append(item)
+            interleaved_sequence_1 += image_placeholder + " describing the image in detail. the image shows"
     
+    caption = Emu_inference(image_list_1, interleaved_sequence_1, instruct=False)
+
+    interleaved_sequence = f"a picture of {caption}. based on the picture, {question} short answer:"
+    
+    vqa_answer = Emu_inference([], interleaved_sequence, instruct=False)
+    
+    return vqa_answer
 
 
 def instruct_example():
@@ -194,4 +217,5 @@ if __name__ == '__main__':
         instruct_example()
     else:
         # pretrain_example()
-        imagecaption_example()
+        # imagecaption_example()
+        vqa_example()
