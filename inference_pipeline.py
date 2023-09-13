@@ -296,7 +296,7 @@ if __name__ == '__main__':
                 continue
         with open(f"/f_data/G/mmllama/okvqa_eval_{version}.json", "w") as file:  
             json.dump(results, file)
-    
+        print('saved okvqa json')
     
     if args.caption:
         ## test coco_karpathy val data
